@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 // Types
 interface Task {
@@ -32,6 +33,8 @@ interface Activity {
 }
 
 export const ActivityDashboard: React.FC = () => {
+  const { user, logout } = useAuth();
+
   // Navigation / Sidebar State with distinct colors per item
   const [activities] = useState<Activity[]>([
     {
@@ -253,8 +256,26 @@ export const ActivityDashboard: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="h-12 px-8 flex justify-end items-center bg-[#1e2038] shrink-0 border-b border-[#2a2c47]">
-          <span className="text-xs text-gray-400 font-mono">555@nu.ac.th</span>
+        <header className="h-12 px-8 flex justify-end items-center gap-3 bg-[#1e2038] shrink-0 border-b border-[#2a2c47]">
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt={user.displayName ?? 'Profile'}
+              className="w-6 h-6 rounded-full border border-gray-600 object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className="w-6 h-6 rounded-full bg-[#2a2d42] border border-gray-600" />
+          )}
+
+          <span className="text-xs text-gray-400 font-mono">{user?.email}</span>
+
+          <button
+            onClick={logout}
+            className="ml-1 px-3 py-1 text-[11px] text-gray-400 hover:text-white border border-gray-600 rounded-full hover:bg-[#2a2d42] transition-all"
+          >
+            ออกจากระบบ
+          </button>
         </header>
 
         {currentView === 'board' ? (
