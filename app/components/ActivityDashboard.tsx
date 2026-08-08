@@ -6,13 +6,14 @@ import React, { useState } from 'react';
 interface Task {
   id: string;
   title: string;
+  status: 'todo' | 'doing' | 'done';
   statusColor: string;
 }
 
 interface Department {
   id: string;
   name: string;
-  topGlowColor: string; // Accent color peeking out from the top
+  topGlowColor: string;
   tasks: Task[];
 }
 
@@ -74,9 +75,37 @@ export const ActivityDashboard: React.FC = () => {
   ]);
   const [selectedActivityId, setSelectedActivityId] = useState<string>('2');
 
-  const [todoCount] = useState<number>(1);
-  const [inProgressCount] = useState<number>(1);
-  const [doneCount] = useState<number>(0);
+  // Modal State for Adding Tasks
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState<boolean>(false);
+  const [activeDeptId, setActiveDeptId] = useState<string | null>(null);
+  const [taskTitleInput, setTaskTitleInput] = useState<string>('');
+  const [taskStatusInput, setTaskStatusInput] = useState<'todo' | 'doing' | 'done'>('todo');
+
+  // Department Columns State
+  const [departments, setDepartments] = useState<Department[]>([
+    { id: '1', name: 'ประธาน/รอง', topGlowColor: 'bg-blue-400', tasks: [] },
+    { id: '2', name: 'เอกสาร', topGlowColor: 'bg-white', tasks: [] },
+    {
+      id: '3',
+      name: 'ศิลป์',
+      topGlowColor: 'bg-[#8ec63f]',
+      tasks: [{ id: 't1', title: 'ออกแบบเว็บ', status: 'doing', statusColor: 'bg-yellow-400' }],
+    },
+    { id: '4', name: 'สื่อ', topGlowColor: 'bg-purple-500', tasks: [] },
+    { id: '5', name: 'เลขา', topGlowColor: 'bg-red-500', tasks: [] },
+    {
+      id: '6',
+      name: 'เหรัญญิก',
+      topGlowColor: 'bg-emerald-400',
+      tasks: [{ id: 't2', title: 'เว็บ To-Do', status: 'todo', statusColor: 'bg-orange-500' }],
+    },
+  ]);
+
+  // Dynamic board statistics derived from departments data
+  const allTasks = departments.flatMap((d) => d.tasks);
+  const todoCount = allTasks.filter((t) => t.status === 'todo').length;
+  const inProgressCount = allTasks.filter((t) => t.status === 'doing').length;
+  const doneCount = allTasks.filter((t) => t.status === 'done').length;
   const progressPercentage = 20;
 
   const handleAddActivity = () => {
@@ -95,28 +124,47 @@ export const ActivityDashboard: React.FC = () => {
     setSelectedActivityId(newId);
   };
 
-  // Department Columns with top accent colors matching image_5c7f1b.png
-  const [departments] = useState<Department[]>([
-    { id: '1', name: 'ประธาน/รอง', topGlowColor: 'bg-blue-400', tasks: [] },
-    { id: '2', name: 'เอกสาร', topGlowColor: 'bg-white', tasks: [] },
-    {
-      id: '3',
-      name: 'ศิลป์',
-      topGlowColor: 'bg-[#8ec63f]', // Lime green from image
-      tasks: [{ id: 't1', title: 'ออกแบบเว็บ', statusColor: 'bg-yellow-400' }],
-    },
-    { id: '4', name: 'สื่อ', topGlowColor: 'bg-purple-500', tasks: [] },
-    { id: '5', name: 'เลขา', topGlowColor: 'bg-red-500', tasks: [] },
-    {
-      id: '6',
-      name: 'เหรัญญิก',
-      topGlowColor: 'bg-emerald-400',
-      tasks: [{ id: 't2', title: 'เว็บ To-Do', statusColor: 'bg-orange-500' }],
-    },
-  ]);
+  // Modal Handlers
+  const openAddTaskModal = (deptId: string) => {
+    setActiveDeptId(deptId);
+    setTaskTitleInput('');
+    setTaskStatusInput('todo');
+    setIsTaskModalOpen(true);
+  };
+
+  const closeAddTaskModal = () => {
+    setIsTaskModalOpen(false);
+    setActiveDeptId(null);
+  };
+
+  const handleApplyTask = () => {
+    if (!taskTitleInput.trim() || !activeDeptId) return;
+
+    let color = 'bg-orange-500'; // todo
+    if (taskStatusInput === 'doing') color = 'bg-yellow-400';
+    if (taskStatusInput === 'done') color = 'bg-emerald-400';
+
+    const newTask: Task = {
+      id: `task-${Date.now()}`,
+      title: taskTitleInput.trim(),
+      status: taskStatusInput,
+      statusColor: color,
+    };
+
+    setDepartments((prevDepts) =>
+      prevDepts.map((dept) => {
+        if (dept.id === activeDeptId) {
+          return { ...dept, tasks: [...dept.tasks, newTask] };
+        }
+        return dept;
+      })
+    );
+
+    closeAddTaskModal();
+  };
 
   return (
-    <div className="flex h-screen w-full bg-[#1b1c31] text-white font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-[#1b1c31] text-white font-sans overflow-hidden relative">
       {/* Sidebar */}
       <aside className="w-64 bg-[#23253b] p-4 flex flex-col border-r border-[#2d2f48]">
         <div className="flex items-baseline gap-2 mb-6">
@@ -214,15 +262,10 @@ export const ActivityDashboard: React.FC = () => {
             <div className="grid grid-cols-6 gap-3">
               {departments.map((dept) => (
                 <div key={dept.id} className="flex flex-col items-center gap-2">
-                  
-                  {/* Department Pill Header with top glow element */}
                   <div className="relative w-full pt-1">
-                    {/* Background Colored Lip / Ellipse (positioned at top) */}
                     <div
                       className={`absolute top-0 left-1/2 -translate-x-1/2 w-11/12 h-3 ${dept.topGlowColor} rounded-t-xl opacity-90`}
                     />
-                    
-                    {/* Foreground Dark Button Box with Gray Border */}
                     <div className="relative w-full py-2 px-3 bg-[#2b2c40] border border-gray-300/60 rounded-xl text-center text-xs font-light text-gray-200 z-10 shadow-md">
                       {dept.name}
                     </div>
@@ -239,8 +282,11 @@ export const ActivityDashboard: React.FC = () => {
                     </div>
                   ))}
 
-                  {/* Add Task Link */}
-                  <button className="text-xs text-gray-400 font-light hover:text-white transition-colors mt-1">
+                  {/* Add Task Button */}
+                  <button
+                    onClick={() => openAddTaskModal(dept.id)}
+                    className="text-xs text-gray-400 font-light hover:text-white transition-colors mt-1"
+                  >
                     + เพิ่มงาน
                   </button>
                 </div>
@@ -249,6 +295,103 @@ export const ActivityDashboard: React.FC = () => {
           </section>
         </div>
       </main>
+
+      {/* Floating Add Task Panel Modal */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#23253b] border border-gray-600 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-gray-700/60 pb-3">
+              <h3 className="text-lg font-medium text-white">เพิ่มงานใหม่</h3>
+              <button
+                onClick={closeAddTaskModal}
+                className="text-gray-400 hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Task Name Text Box */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-300 font-light">ชื่องาน (Work Name)</label>
+              <input
+                type="text"
+                value={taskTitleInput}
+                onChange={(e) => setTaskTitleInput(e.target.value)}
+                placeholder="กรอกชื่องาน..."
+                className="w-full bg-[#1b1c31] border border-gray-600 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-400 transition-colors"
+                autoFocus
+              />
+            </div>
+
+            {/* Status Selector Options */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-300 font-light">สถานะ (Status)</label>
+              <div className="grid grid-cols-3 gap-2">
+                {/* TODO */}
+                <button
+                  type="button"
+                  onClick={() => setTaskStatusInput('todo')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    taskStatusInput === 'todo'
+                      ? 'border-orange-500 bg-orange-500/10 text-orange-400 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-orange-500" />
+                  สิ่งที่ต้องทำ
+                </button>
+
+                {/* DOING */}
+                <button
+                  type="button"
+                  onClick={() => setTaskStatusInput('doing')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    taskStatusInput === 'doing'
+                      ? 'border-yellow-400 bg-yellow-400/10 text-yellow-300 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                  กำลังทำ
+                </button>
+
+                {/* DONE */}
+                <button
+                  type="button"
+                  onClick={() => setTaskStatusInput('done')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    taskStatusInput === 'done'
+                      ? 'border-emerald-400 bg-emerald-400/10 text-emerald-300 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  สำเร็จ
+                </button>
+              </div>
+            </div>
+
+            {/* Floating Action Buttons under the Panel */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={closeAddTaskModal}
+                className="px-5 py-2 text-xs font-medium text-gray-400 hover:text-white border border-gray-600 rounded-full hover:bg-gray-700/50 transition-colors"
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyTask}
+                disabled={!taskTitleInput.trim()}
+                className="px-6 py-2 text-xs font-semibold text-slate-900 bg-emerald-400 rounded-full hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+              >
+                APPLY
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
