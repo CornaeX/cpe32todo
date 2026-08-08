@@ -66,9 +66,8 @@ export const ActivityDashboard: React.FC = () => {
   const [modalTaskTitle, setModalTaskTitle] = useState<string>('');
   const [modalTaskStatus, setModalTaskStatus] = useState<'todo' | 'doing' | 'done'>('doing');
 
-  // Active Task for Detail Editor (Step 2)
-  const [activeDeptId, setActiveDeptId] = useState<string | null>('3');
-  const [editingTask, setEditingTask] = useState<Task>({
+  // Initial Task Template
+  const defaultTask: Task = {
     id: 't1',
     title: 'ออกแบบเว็บ',
     status: 'doing',
@@ -77,7 +76,20 @@ export const ActivityDashboard: React.FC = () => {
     details:
       '• 55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555',
     imageUrl: 'https://placehold.co/400x400/22253b/8ee3f5?text=Miku+Image',
-  });
+  };
+
+  // Active Task and State Snapshot for checking edits
+  const [activeDeptId, setActiveDeptId] = useState<string | null>('3');
+  const [editingTask, setEditingTask] = useState<Task>(defaultTask);
+  const [initialTaskState, setInitialTaskState] = useState<Task>(defaultTask);
+
+  // Check if anything changed in editingTask vs initialTaskState
+  const isDirty =
+    editingTask.title !== initialTaskState.title ||
+    editingTask.statusText !== initialTaskState.statusText ||
+    editingTask.details !== initialTaskState.details ||
+    editingTask.imageUrl !== initialTaskState.imageUrl ||
+    editingTask.status !== initialTaskState.status;
 
   // Department Columns
   const [departments, setDepartments] = useState<Department[]>([
@@ -87,18 +99,7 @@ export const ActivityDashboard: React.FC = () => {
       id: '3',
       name: 'ศิลป์',
       topGlowColor: 'bg-[#8ec63f]',
-      tasks: [
-        {
-          id: 't1',
-          title: 'ออกแบบเว็บ',
-          status: 'doing',
-          statusText: 'กำลังทำเรื่องยื่น',
-          statusColor: 'bg-yellow-400',
-          details:
-            '• 55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555555555555555555555555555555555\n55555555',
-          imageUrl: 'https://placehold.co/400x400/22253b/8ee3f5?text=Miku+Image',
-        },
-      ],
+      tasks: [defaultTask],
     },
     { id: '4', name: 'สื่อ', topGlowColor: 'bg-purple-500', tasks: [] },
     { id: '5', name: 'เลขา', topGlowColor: 'bg-red-500', tasks: [] },
@@ -145,6 +146,7 @@ export const ActivityDashboard: React.FC = () => {
 
     setActiveDeptId(modalTargetDeptId);
     setEditingTask(newTask);
+    setInitialTaskState(newTask); // Set initial snapshot
     setIsModalOpen(false);
 
     setCurrentView('detail-editor');
@@ -169,9 +171,15 @@ export const ActivityDashboard: React.FC = () => {
     setCurrentView('board');
   };
 
+  const handleCancelDetails = () => {
+    // Revert edits back to initial state
+    setEditingTask(initialTaskState);
+  };
+
   const handleOpenExistingTask = (deptId: string, task: Task) => {
     setActiveDeptId(deptId);
     setEditingTask(task);
+    setInitialTaskState(task); // Set initial snapshot
     setCurrentView('detail-editor');
   };
 
@@ -185,7 +193,7 @@ export const ActivityDashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full bg-[#1b1c31] text-white font-sans overflow-hidden relative">
-      {/* ================= UPDATED SIDEBAR WITH DYNAMIC COLORS & RIGHT BAR ================= */}
+      {/* ================= SIDEBAR ================= */}
       <aside className="w-64 bg-[#23253b] p-4 flex flex-col border-r border-[#2d2f48] h-full overflow-hidden shrink-0 relative">
         {/* Title */}
         <div className="flex items-baseline gap-2 mb-5 shrink-0">
@@ -198,7 +206,7 @@ export const ActivityDashboard: React.FC = () => {
           + เพิ่มกิจกรรม
         </button>
 
-        {/* Scrollable Badges (No visible scrollbar) */}
+        {/* Scrollable Badges */}
         <div className="flex-1 overflow-y-auto space-y-3 min-h-0 pr-0.5 scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {activities.map((act) => {
             const isSelected = act.id === selectedActivityId;
@@ -212,7 +220,6 @@ export const ActivityDashboard: React.FC = () => {
                     : 'border border-gray-700/60 opacity-60 hover:opacity-100 hover:border-gray-500'
                 }`}
               >
-                {/* Dynamic Right Side Accent Bar for Selected Item */}
                 {isSelected && (
                   <div
                     className={`absolute right-0 top-0 bottom-0 w-1.5 ${act.activeRightBarColor} rounded-r-2xl shadow-sm`}
@@ -232,7 +239,6 @@ export const ActivityDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full bg-[#1b1c31]/80 h-2 rounded-full overflow-hidden p-0.5 border border-gray-700/50">
                   <div
                     className={`h-full ${act.progressColor} rounded-full transition-all duration-300`}
@@ -323,6 +329,15 @@ export const ActivityDashboard: React.FC = () => {
           /* DETAIL EDITOR VIEW */
           <div className="p-8 space-y-6 overflow-y-auto flex-1">
             <div className="flex items-center gap-3">
+              {/* Back to Board Button */}
+              <button
+                onClick={() => setCurrentView('board')}
+                className="mr-2 p-1.5 rounded-full bg-[#2a2d42] border border-gray-500/50 hover:bg-[#343852] text-gray-300 hover:text-white transition-all text-sm flex items-center justify-center"
+                title="กลับไปหน้ากระดาน"
+              >
+                ←
+              </button>
+
               <span className={`w-3.5 h-3.5 rounded-full ${editingTask.statusColor}`} />
 
               <input
@@ -332,19 +347,24 @@ export const ActivityDashboard: React.FC = () => {
                 className="bg-[#2a2d42] border border-gray-400/80 rounded-2xl px-6 py-1.5 text-sm text-gray-200 font-light focus:outline-none focus:border-white min-w-[200px]"
               />
 
-              <button
-                onClick={handleSaveDetails}
-                className="bg-[#2a2d42] border border-gray-400/80 hover:bg-[#343852] text-xs text-gray-300 px-5 py-2 rounded-xl transition-all"
-              >
-                APPLY
-              </button>
+              {/* ONLY RENDER APPLY AND CANCEL WHEN ANYTHING CHANGED */}
+              {isDirty && (
+                <div className="flex items-center gap-3 animate-fade-in">
+                  <button
+                    onClick={handleSaveDetails}
+                    className="bg-[#2a2d42] border border-gray-400/80 hover:bg-[#343852] text-xs text-emerald-400 hover:text-emerald-300 px-5 py-2 rounded-xl transition-all font-medium"
+                  >
+                    APPLY
+                  </button>
 
-              <button
-                onClick={() => setCurrentView('board')}
-                className="bg-[#2a2d42] border border-gray-400/80 hover:bg-[#343852] text-xs text-red-400 px-5 py-2 rounded-xl transition-all"
-              >
-                CANCEL
-              </button>
+                  <button
+                    onClick={handleCancelDetails}
+                    className="bg-[#2a2d42] border border-gray-400/80 hover:bg-[#343852] text-xs text-red-400 hover:text-red-300 px-5 py-2 rounded-xl transition-all"
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
