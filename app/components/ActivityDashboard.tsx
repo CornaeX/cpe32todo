@@ -115,7 +115,7 @@ export const ActivityDashboard: React.FC = () => {
   const handleOpenModal = (deptId: string) => {
     setModalTargetDeptId(deptId);
     setModalTaskTitle('');
-    setModalTaskStatus('doing');
+    setModalTaskStatus('todo');
     setIsModalOpen(true);
   };
 
