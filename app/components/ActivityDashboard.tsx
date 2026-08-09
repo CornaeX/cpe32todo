@@ -15,6 +15,13 @@ import {
   type TaskWithId,
 } from '@/lib/firestore';
 
+import {
+  ACCEPTED_IMAGE_ACCEPT_ATTR,
+  deleteUploadedFiles,
+  isAcceptedImageType,
+  useUploadThing,
+} from '@/lib/uploadthing';
+
 // ================= UI-facing types =================
 // These mirror the original prototype's shapes so the JSX below stays
 // untouched. Firestore documents are mapped into these via toUiTask().
@@ -26,6 +33,8 @@ interface Task {
   statusColor: string;
   details: string;
   imageUrl?: string;
+  /** UploadThing file key for imageUrl, if it was uploaded through this app. */
+  imageKey?: string;
 }
 
 interface Department {
@@ -97,6 +106,7 @@ function toUiTask(t: TaskWithId): Task {
     statusColor: statusColorFor(t.status),
     details: t.details,
     imageUrl: t.imageUrl ?? undefined,
+    imageKey: t.imageKey ?? undefined,
   };
 }
 
@@ -212,6 +222,18 @@ export const ActivityDashboard: React.FC = () => {
   const [initialTaskState, setInitialTaskState] = useState<Task | null>(null);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
 
+  // Image upload (UploadThing) state for the task being edited
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  // Every successful upload made during the current editing session, so an
+  // image that gets replaced (or a whole edit that gets cancelled) before
+  // saving can be cleaned up from UploadThing instead of left orphaned.
+  const [sessionUploads, setSessionUploads] = useState<Array<{ url: string; key: string }>>([]);
+
+  const { startUpload, isUploading } = useUploadThing('taskImage', {
+    onUploadProgress: (progress) => setUploadProgress(progress),
+  });
+
   // Check if anything changed in editingTask vs initialTaskState
   const isDirty =
     !!editingTask &&
@@ -269,9 +291,25 @@ export const ActivityDashboard: React.FC = () => {
     setActiveDeptId(modalTargetDeptId);
     setEditingTask(draftTask);
     setInitialTaskState(draftTask);
+    setImageUploadError(null);
+    setUploadProgress(0);
+    setSessionUploads([]);
     setIsModalOpen(false);
 
     setCurrentView('detail-editor');
+  };
+
+  // Deletes every image uploaded during the current editing session that
+  // ended up NOT being the final saved image (best-effort; failures are
+  // logged but never surfaced, since a lingering orphaned file isn't harmful).
+  const discardSessionUploads = (keepUrl?: string | null) => {
+    const keysToDelete = sessionUploads
+      .filter((u) => u.url !== keepUrl)
+      .map((u) => u.key);
+    if (keysToDelete.length > 0) {
+      void deleteUploadedFiles({ keys: keysToDelete });
+    }
+    setSessionUploads([]);
   };
 
   const handleSaveDetails = async () => {
@@ -287,6 +325,7 @@ export const ActivityDashboard: React.FC = () => {
           statusText: editingTask.statusText,
           details: editingTask.details,
           imageUrl: editingTask.imageUrl || null,
+          imageKey: editingTask.imageKey || null,
           createdBy: user.email,
         });
       } else {
@@ -300,10 +339,28 @@ export const ActivityDashboard: React.FC = () => {
             statusText: editingTask.statusText,
             details: editingTask.details,
             imageUrl: editingTask.imageUrl || null,
+            imageKey: editingTask.imageKey || null,
           },
           initialTaskState?.status
         );
       }
+
+      // Firestore save succeeded — now it's safe to clean up images that
+      // are no longer referenced: any re-uploads from this session that
+      // weren't the final one, plus the previously-saved image if it was
+      // replaced.
+      const finalUrl = editingTask.imageUrl || null;
+      discardSessionUploads(finalUrl);
+      if (
+        initialTaskState?.imageUrl &&
+        initialTaskState.imageUrl !== finalUrl
+      ) {
+        void deleteUploadedFiles({
+          keys: initialTaskState.imageKey ? [initialTaskState.imageKey] : [],
+          urls: initialTaskState.imageKey ? [] : [initialTaskState.imageUrl],
+        });
+      }
+
       setCurrentView('board');
     } catch (error) {
       console.error('Failed to save task', error);
@@ -313,22 +370,63 @@ export const ActivityDashboard: React.FC = () => {
   };
 
   const handleCancelDetails = () => {
-    // Revert edits back to initial state
+    // Revert edits back to initial state, and clean up any images uploaded
+    // during this session since none of them will end up being used.
+    discardSessionUploads(null);
+    setImageUploadError(null);
     setEditingTask(initialTaskState);
+  };
+
+  const handleBackToBoard = () => {
+    // Leaving without saving discards any in-progress edits, including
+    // images uploaded (but not yet applied) during this session.
+    discardSessionUploads(null);
+    setImageUploadError(null);
+    setCurrentView('board');
   };
 
   const handleOpenExistingTask = (deptId: string, task: Task) => {
     setActiveDeptId(deptId);
     setEditingTask(task);
     setInitialTaskState(task); // Set initial snapshot
+    setImageUploadError(null);
+    setUploadProgress(0);
+    setSessionUploads([]);
     setCurrentView('detail-editor');
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setEditingTask((prev) => (prev ? { ...prev, imageUrl } : prev));
+    // Allow re-selecting the same file later (e.g. after a failed upload).
+    e.target.value = '';
+    if (!file || !editingTask) return;
+
+    if (!isAcceptedImageType(file.type)) {
+      setImageUploadError('รองรับเฉพาะไฟล์ JPG, JPEG, PNG หรือ WEBP เท่านั้น');
+      return;
+    }
+
+    setImageUploadError(null);
+    setUploadProgress(0);
+
+    try {
+      const result = await startUpload([file]);
+      const uploaded = result?.[0];
+      if (!uploaded) {
+        setImageUploadError('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+        return;
+      }
+
+      const newUrl = uploaded.ufsUrl;
+      const newKey = uploaded.key;
+
+      // Don't touch editingTask.imageUrl until the upload has fully
+      // succeeded — if it fails, the previous image (if any) stays intact.
+      setSessionUploads((prev) => [...prev, { url: newUrl, key: newKey }]);
+      setEditingTask((prev) => (prev ? { ...prev, imageUrl: newUrl, imageKey: newKey } : prev));
+    } catch (error) {
+      console.error('Image upload failed', error);
+      setImageUploadError('อัปโหลดรูปภาพไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     }
   };
 
@@ -465,7 +563,7 @@ export const ActivityDashboard: React.FC = () => {
             <div className="flex items-center gap-3">
               {/* Back to Board Button */}
               <button
-                onClick={() => setCurrentView('board')}
+                onClick={handleBackToBoard}
                 className="mr-2 p-1.5 rounded-full bg-[#2a2d42] border border-gray-500/50 hover:bg-[#343852] text-gray-300 hover:text-white transition-all text-sm flex items-center justify-center"
                 title="กลับไปหน้ากระดาน"
               >
@@ -530,7 +628,7 @@ export const ActivityDashboard: React.FC = () => {
 
               <div className="col-span-5 flex justify-end">
                 <div className="w-[300px] bg-[#2a2d42]/80 border border-gray-400/80 rounded-2xl overflow-hidden flex flex-col justify-between shadow-lg">
-                  <div className="p-3 flex items-center justify-center flex-1 bg-[#23253b]/50 min-h-[240px]">
+                  <div className="relative p-3 flex items-center justify-center flex-1 bg-[#23253b]/50 min-h-[240px]">
                     {editingTask.imageUrl ? (
                       <img
                         src={editingTask.imageUrl}
@@ -542,20 +640,50 @@ export const ActivityDashboard: React.FC = () => {
                         ยังไม่ได้เลือกรูปภาพ
                       </div>
                     )}
+
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-black/70 rounded-lg flex flex-col items-center justify-center gap-2">
+                        <span className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs text-gray-200 font-light">
+                          กำลังอัปโหลด... {uploadProgress}%
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  <label className="border-t border-gray-500/50 py-3 text-center text-xs text-gray-300 font-light cursor-pointer hover:bg-[#343852] transition-colors block">
-                    แก้ไข/เพิ่มรูปภาพ (ได้แค่รูปเดียว)
+                  <label
+                    className={`border-t border-gray-500/50 py-3 text-center text-xs text-gray-300 font-light block ${
+                      isUploading
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'cursor-pointer hover:bg-[#343852] transition-colors'
+                    }`}
+                  >
+                    {isUploading ? 'กำลังอัปโหลด...' : 'แก้ไข/เพิ่มรูปภาพ (ได้แค่รูปเดียว)'}
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={ACCEPTED_IMAGE_ACCEPT_ATTR}
                       onChange={handleImageUpload}
+                      disabled={isUploading}
                       className="hidden"
                     />
                   </label>
                 </div>
               </div>
             </div>
+
+            {imageUploadError && (
+              <div className="max-w-[300px] ml-auto bg-red-500/10 border border-red-500/50 text-red-300 text-[11px] rounded-xl px-3 py-2.5 flex items-start justify-between gap-2">
+                <span className="font-light leading-relaxed">{imageUploadError}</span>
+                <button
+                  type="button"
+                  onClick={() => setImageUploadError(null)}
+                  className="text-red-300 hover:text-white font-bold shrink-0"
+                  aria-label="ปิดข้อความแจ้งเตือน"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           /* BOARD VIEW */

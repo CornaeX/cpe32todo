@@ -62,6 +62,7 @@ export async function createTask(
     statusText: string;
     details?: string;
     imageUrl?: string | null;
+    imageKey?: string | null;
     createdBy: string;
   }
 ): Promise<string> {
@@ -71,6 +72,7 @@ export async function createTask(
     statusText: input.statusText,
     details: input.details ?? "",
     imageUrl: input.imageUrl ?? null,
+    imageKey: input.imageKey ?? null,
     createdBy: input.createdBy,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -99,6 +101,7 @@ export async function updateTask(
     statusText: string;
     details: string;
     imageUrl: string | null;
+    imageKey: string | null;
   }>,
   previousStatus?: TaskStatus
 ): Promise<void> {

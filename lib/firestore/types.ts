@@ -28,6 +28,14 @@ export interface TaskDoc {
   statusText: string;
   details: string;
   imageUrl: string | null;
+  /**
+   * UploadThing file key for imageUrl, when it was uploaded through this
+   * app. Stored alongside the URL so a replaced/deleted image can be
+   * cleaned up from UploadThing storage reliably (without needing to
+   * parse the key back out of the URL). Older tasks saved before this
+   * field existed will simply have it as null/undefined.
+   */
+  imageKey?: string | null;
   createdBy: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
