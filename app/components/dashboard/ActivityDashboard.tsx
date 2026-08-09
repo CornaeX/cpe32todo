@@ -118,6 +118,7 @@ export const ActivityDashboard: React.FC = () => {
   const [modalTargetDeptId, setModalTargetDeptId] = useState<string | null>(null);
   const [modalTaskTitle, setModalTaskTitle] = useState<string>("");
   const [modalTaskStatus, setModalTaskStatus] = useState<TaskStatus>("doing");
+  const [isCreatingTask, setIsCreatingTask] = useState<boolean>(false);
 
   // New-activity sheet state
   const [isActivityModalOpen, setIsActivityModalOpen] = useState<boolean>(false);
@@ -171,33 +172,37 @@ export const ActivityDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleModalApply = () => {
-    if (!modalTaskTitle.trim() || !modalTargetDeptId) return;
+  const handleModalApply = async () => {
+    if (!modalTaskTitle.trim() || !modalTargetDeptId || !selectedActivityId || !user?.email) return;
 
     let defaultStatusText = "สิ่งที่ต้องทำ";
     if (modalTaskStatus === "doing") defaultStatusText = "กำลังทำเรื่องยื่น";
     else if (modalTaskStatus === "done") defaultStatusText = "สำเร็จ";
 
-    // Not persisted to Firestore yet — a new task only exists locally until
-    // the detail editor's own save action is used.
-    const draftTask: Task = {
-      id: `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      title: modalTaskTitle.trim(),
-      status: modalTaskStatus,
-      statusText: defaultStatusText,
-      details: "",
-      imageUrl: "",
-    };
+    setIsCreatingTask(true);
+    try {
+      // Saved directly to Firestore here — the detail editor (with the
+      // image-upload flow) is only reached later, by opening the task
+      // from the board.
+      await createTask(selectedActivityId, modalTargetDeptId, {
+        title: modalTaskTitle.trim(),
+        status: modalTaskStatus,
+        statusText: defaultStatusText,
+        details: "",
+        imageUrl: null,
+        imageKey: null,
+        createdBy: user.email,
+      });
 
-    setActiveDeptId(modalTargetDeptId);
-    setEditingTask(draftTask);
-    setInitialTaskState(draftTask);
-    setImageUploadError(null);
-    setUploadProgress(0);
-    setSessionUploads([]);
-    setIsModalOpen(false);
-
-    setCurrentView("detail-editor");
+      setIsModalOpen(false);
+      setModalTargetDeptId(null);
+      setModalTaskTitle("");
+      setModalTaskStatus("todo");
+    } catch (error) {
+      console.error("Failed to create task", error);
+    } finally {
+      setIsCreatingTask(false);
+    }
   };
 
   const discardSessionUploads = (keepUrl?: string | null) => {
@@ -499,6 +504,7 @@ export const ActivityDashboard: React.FC = () => {
         open={isModalOpen}
         title={modalTaskTitle}
         status={modalTaskStatus}
+        creating={isCreatingTask}
         onTitleChange={setModalTaskTitle}
         onStatusChange={setModalTaskStatus}
         onClose={() => setIsModalOpen(false)}
