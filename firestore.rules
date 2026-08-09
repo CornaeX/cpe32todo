@@ -1,0 +1,121 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    // Any request that carries a valid Firebase Auth ID token.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Only Google accounts on the Naresuan University domain are allowed to
+    // use the app. This mirrors the client-side check in AuthContext.tsx,
+    // but here it is enforced server-side, where it actually matters:
+    // hiding UI buttons never stops someone from calling the Firestore SDK
+    // (or the REST API) directly with a non-@nu.ac.th account.
+    function isNuUser() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@nu[.]ac[.]th$');
+    }
+
+    // The email a doc claims as its author must match the caller's own
+    // verified email, so nobody can write data and attribute it to someone
+    // else.
+    function claimsOwnEmail(data) {
+      return data.createdBy == request.auth.token.email;
+    }
+
+    // ---------------------------------------------------------------------
+    // /activities/{activityId}
+    //   Top-level shared task boards. Every @nu.ac.th user is treated as a
+    //   member of the same team and can see/collaborate on every activity
+    //   (this matches how the app itself queries and renders data — there
+    //   is no per-user filtering in the client).
+    // ---------------------------------------------------------------------
+    match /activities/{activityId} {
+      allow read: if isNuUser();
+
+      // Creating an activity: must be signed in as @nu.ac.th, must claim
+      // yourself as the creator, and must start from a clean taskStats
+      // counter (can't fabricate progress on creation).
+      allow create: if isNuUser()
+        && claimsOwnEmail(request.resource.data)
+        && request.resource.data.taskStats.total == 0
+        && request.resource.data.taskStats.done == 0;
+
+      // Updating an activity: in practice this is only ever the
+      // taskStats.{total,done} counters, bumped whenever any team member
+      // creates/edits/deletes a task in one of its departments. Restrict
+      // the update to touching only those two fields — the name,
+      // createdBy, and createdAt of an activity can't be changed this way.
+      allow update: if isNuUser()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['taskStats']);
+
+      // No delete flow exists in the app today; default-deny (falls through
+      // to the catch-all rule below) rather than opening up an unused path.
+
+      // ---------------------------------------------------------------------
+      // /activities/{activityId}/departments/{departmentId}
+      //   Fixed set of columns seeded when an activity is created. The app
+      //   only ever reads and creates these — never edits or deletes them.
+      // ---------------------------------------------------------------------
+      match /departments/{departmentId} {
+        allow read: if isNuUser();
+        allow create: if isNuUser();
+        // No update/delete flow exists in the app today; default-deny.
+
+        // ---------------------------------------------------------------------
+        // /activities/{activityId}/departments/{departmentId}/tasks/{taskId}
+        //   The actual to-do cards. Any @nu.ac.th team member can create,
+        //   edit, or delete a task, mirroring the shared-board UI.
+        // ---------------------------------------------------------------------
+        match /tasks/{taskId} {
+          allow read: if isNuUser();
+
+          allow create: if isNuUser() && claimsOwnEmail(request.resource.data);
+
+          // Edits (status changes, details, image, etc.) are allowed by any
+          // team member, but the task's recorded author can't be rewritten
+          // after the fact.
+          allow update: if isNuUser()
+            && request.resource.data.createdBy == resource.data.createdBy;
+
+          allow delete: if isNuUser();
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // /users/{uid}
+    //   Not currently used by the app (createdBy stores an email string,
+    //   not a profile doc), but reserved here in case a user-profile
+    //   feature is added later. A user may only read/write their own
+    //   profile document, and only while authenticated with an @nu.ac.th
+    //   account whose uid matches the document id.
+    // ---------------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isNuUser() && request.auth.uid == uid;
+      allow create, update: if isNuUser()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // Deny everything else by default (defense in depth — every real path
+    // above is already explicit, this just makes sure nothing new can slip
+    // through unauthenticated or from a non-@nu.ac.th account).
+    // ---------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
