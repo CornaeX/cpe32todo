@@ -2,6 +2,21 @@
 
 import { generateReactHelpers } from "@uploadthing/react";
 import type { OurFileRouter } from "@/app/api/uploadthing/core";
+import { auth } from "@/lib/firebase";
+
+/**
+ * Fresh Firebase ID token for the signed-in user, as an `Authorization:
+ * Bearer <token>` header. Both UploadThing API routes verify this token
+ * server-side (see lib/verifyFirebaseIdToken.ts) — they aren't covered by
+ * Firestore Security Rules, so this is what actually keeps them restricted
+ * to signed-in @nu.ac.th users instead of being callable anonymously.
+ * Returns an empty object (no header) if nobody is signed in; the routes
+ * then simply reject the request.
+ */
+export async function uploadThingAuthHeaders(): Promise<HeadersInit> {
+  const token = await auth.currentUser?.getIdToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export const { useUploadThing } = generateReactHelpers<OurFileRouter>();
 
@@ -29,7 +44,7 @@ export async function deleteUploadedFiles(input: { keys?: string[]; urls?: strin
   try {
     await fetch("/api/uploadthing/delete", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await uploadThingAuthHeaders()) },
       body: JSON.stringify({ keys, urls }),
     });
   } catch (error) {

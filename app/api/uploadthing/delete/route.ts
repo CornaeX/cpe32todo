@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
+import { isNuEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
 
 const utapi = new UTApi();
 
@@ -22,16 +23,20 @@ function extractFileKeyFromUrl(url: string): string | null {
 /**
  * Best-effort cleanup of task images that were uploaded to UploadThing but
  * are no longer referenced (replaced by a newer upload, or discarded by
- * cancelling an edit). This is intentionally lenient: any failure here just
- * means an orphaned file lingers in storage, which isn't harmful, so we
- * never surface an error to the caller for this endpoint.
- *
- * NOTE: this route does not verify the caller's identity server-side yet —
- * that's deferred to a later security-hardening phase, consistent with the
- * rest of this app's auth model (Firebase Auth is only checked client-side
- * so far).
+ * cancelling an edit). This is intentionally lenient about *failures*: any
+ * failure to delete just means an orphaned file lingers in storage, which
+ * isn't harmful, so those errors are swallowed. Identity is still required
+ * up front, though — this endpoint deletes storage files directly, outside
+ * Firestore Security Rules, so it must not be callable anonymously.
  */
 export async function POST(req: NextRequest) {
+  const authHeader = req.headers.get("authorization");
+  const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const verified = await verifyFirebaseIdToken(idToken);
+  if (!verified || !isNuEmail(verified.email)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = (await req.json()) as { keys?: unknown; urls?: unknown };
     const keysInput = Array.isArray(body.keys) ? body.keys.filter((k): k is string => typeof k === "string") : [];

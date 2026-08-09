@@ -19,6 +19,7 @@ import {
   ACCEPTED_IMAGE_ACCEPT_ATTR,
   deleteUploadedFiles,
   isAcceptedImageType,
+  uploadThingAuthHeaders,
   useUploadThing,
 } from '@/lib/uploadthing';
 
@@ -232,6 +233,7 @@ export const ActivityDashboard: React.FC = () => {
 
   const { startUpload, isUploading } = useUploadThing('taskImage', {
     onUploadProgress: (progress) => setUploadProgress(progress),
+    headers: uploadThingAuthHeaders,
   });
 
   // Check if anything changed in editingTask vs initialTaskState

@@ -1,4 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
+import { UploadThingError } from "uploadthing/server";
+import { isNuEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
 
 const f = createUploadthing();
 
@@ -20,13 +22,22 @@ export const ourFileRouter = {
     },
   })
     .middleware(async ({ req }) => {
-      // Identity is established client-side via Firebase Authentication.
-      // Verifying the Firebase ID token server-side (so this endpoint can
-      // reject unauthenticated requests outright) is deferred to a later
-      // security-hardening pass — for now we just record whatever the
-      // client sends for traceability in upload logs.
-      const uploaderEmail = req.headers.get("x-user-email") ?? "unknown";
-      return { uploaderEmail };
+      // This endpoint is hit directly by the browser, outside Firestore —
+      // Firestore Security Rules don't cover it, so identity has to be
+      // checked here too, the same way the UI and Firestore both restrict
+      // to @nu.ac.th. The client sends its Firebase ID token as a Bearer
+      // token (see lib/uploadthing.ts); reject anything else outright so
+      // this route can't be used to upload files anonymously or from a
+      // non-@nu.ac.th account, even by someone calling it directly.
+      const authHeader = req.headers.get("authorization");
+      const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      const verified = await verifyFirebaseIdToken(idToken);
+
+      if (!verified || !isNuEmail(verified.email)) {
+        throw new UploadThingError("Unauthorized");
+      }
+
+      return { uploaderEmail: verified.email };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       console.log("Task image uploaded", {
