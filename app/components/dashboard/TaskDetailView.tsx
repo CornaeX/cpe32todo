@@ -25,6 +25,7 @@ interface TaskDetailViewProps {
   onCancel: () => void;
   onDelete: () => void;
   onDismissImageError: () => void;
+  onRemoveImage: () => void;
 }
 
 export default function TaskDetailView({
@@ -45,6 +46,7 @@ export default function TaskDetailView({
   onCancel,
   onDelete,
   onDismissImageError,
+  onRemoveImage,
 }: TaskDetailViewProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -108,7 +110,20 @@ export default function TaskDetailView({
               <div className="bg-surface border border-border rounded-2xl overflow-hidden flex flex-col shadow-sm shadow-ink/[0.02]">
                 <div className="relative flex items-center justify-center min-h-[220px] bg-surface-muted/60 p-3">
                   {task.imageUrl ? (
-                    <img src={task.imageUrl} alt="รูปแนบของงาน" className="max-h-[240px] w-auto object-contain rounded-xl" />
+                    <>
+                      <img src={task.imageUrl} alt="รูปแนบของงาน" className="max-h-[240px] w-auto object-contain rounded-xl" />
+                      {!isUploading && (
+                        <button
+                          type="button"
+                          onClick={onRemoveImage}
+                          aria-label="ลบรูปภาพแนบ"
+                          title="ลบรูปภาพ"
+                          className="absolute top-2.5 right-2.5 bg-surface/90 hover:bg-danger-soft hover:text-danger text-ink-muted w-8 h-8 rounded-full flex items-center justify-center border border-border shadow-sm transition-all focus-ring"
+                        >
+                          <TrashIcon width={14} height={14} />
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-ink-faint">
                       <ImageIcon width={26} height={26} />

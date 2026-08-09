@@ -349,6 +349,10 @@ export const ActivityDashboard: React.FC = () => {
     }
   };
 
+  const handleRemoveImage = () => {
+    setEditingTask((prev) => (prev ? { ...prev, imageUrl: undefined, imageKey: undefined } : prev));
+  };
+
   const handleOpenActivityModal = () => {
     setActivityNameInput("");
     setIsActivityModalOpen(true);
@@ -483,6 +487,7 @@ export const ActivityDashboard: React.FC = () => {
               onCancel={handleCancelDetails}
               onDelete={handleDeleteTask}
               onDismissImageError={() => setImageUploadError(null)}
+              onRemoveImage={handleRemoveImage}
             />
           </div>
         ) : (
