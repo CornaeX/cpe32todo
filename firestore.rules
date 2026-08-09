@@ -19,6 +19,7 @@ service cloud.firestore {
       return isSignedIn()
         && request.auth.token.email != null
         && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@nu\\.ac\\.th$')
         && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email.lower()));
     }
 

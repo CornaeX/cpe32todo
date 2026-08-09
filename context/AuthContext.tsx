@@ -20,6 +20,8 @@ import { auth, db } from "@/lib/firebase";
 const NOT_ALLOWED_MESSAGE =
   "อนุญาตเฉพาะบัญชี Google ที่ได้รับสิทธิ์เท่านั้น กรุณาเข้าสู่ระบบด้วยบัญชีที่ถูกต้อง";
 
+const NOT_NU_EMAIL_MESSAGE = "อนุญาตเฉพาะบัญชีอีเมล @nu.ac.th เท่านั้น";
+
 /**
  * Checks the `/allowlist` Firestore collection for an entry matching this
  * email (see firestore.rules — that's the actual access-control list;
@@ -61,15 +63,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && !(await isAllowedEmail(firebaseUser.email))) {
-        // Defensive check: covers any session (e.g. from before this
-        // account was allowlisted, or a stale token, or after being
-        // removed from the allowlist) that isn't currently allowed.
-        await signOut(auth);
-        setUser(null);
-        setError(NOT_ALLOWED_MESSAGE);
-        setLoading(false);
-        return;
+      if (firebaseUser) {
+        const email = firebaseUser.email;
+        if (!email || !email.toLowerCase().endsWith("@nu.ac.th")) {
+          await signOut(auth);
+          setUser(null);
+          setError(NOT_NU_EMAIL_MESSAGE);
+          setLoading(false);
+          return;
+        }
+
+        if (!(await isAllowedEmail(email))) {
+          // Defensive check: covers any session (e.g. from before this
+          // account was allowlisted, or a stale token, or after being
+          // removed from the allowlist) that isn't currently allowed.
+          await signOut(auth);
+          setUser(null);
+          setError(NOT_ALLOWED_MESSAGE);
+          setLoading(false);
+          return;
+        }
       }
 
       setUser(firebaseUser);
@@ -87,8 +100,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const result = await signInWithPopup(auth, provider);
+      const email = result.user.email;
 
-      if (!(await isAllowedEmail(result.user.email))) {
+      if (!email || !email.toLowerCase().endsWith("@nu.ac.th")) {
+        await signOut(auth);
+        setUser(null);
+        setError(NOT_NU_EMAIL_MESSAGE);
+        return;
+      }
+
+      if (!(await isAllowedEmail(email))) {
         await signOut(auth);
         setUser(null);
         setError(NOT_ALLOWED_MESSAGE);

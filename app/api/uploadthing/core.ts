@@ -33,7 +33,12 @@ export const ourFileRouter = {
       const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
       const verified = await verifyFirebaseIdToken(idToken);
 
-      if (!verified || !idToken || !(await isAllowlistedEmail(idToken, verified.email))) {
+      if (
+        !verified ||
+        !idToken ||
+        !verified.email.toLowerCase().endsWith("@nu.ac.th") ||
+        !(await isAllowlistedEmail(idToken, verified.email))
+      ) {
         throw new UploadThingError("Unauthorized");
       }
 

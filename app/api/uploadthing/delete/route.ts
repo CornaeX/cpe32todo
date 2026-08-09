@@ -33,7 +33,12 @@ export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const verified = await verifyFirebaseIdToken(idToken);
-  if (!verified || !idToken || !(await isAllowlistedEmail(idToken, verified.email))) {
+  if (
+    !verified ||
+    !idToken ||
+    !verified.email.toLowerCase().endsWith("@nu.ac.th") ||
+    !(await isAllowlistedEmail(idToken, verified.email))
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
