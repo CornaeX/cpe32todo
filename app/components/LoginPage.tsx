@@ -67,8 +67,8 @@ export default function LoginPage() {
           </Button>
 
           <p className="text-xs text-ink-faint text-center leading-relaxed">
-            อนุญาตเฉพาะบัญชี Google ของมหาวิทยาลัยนเรศวรที่ลงท้ายด้วย{" "}
-            <span className="text-primary font-mono font-medium">@nu.ac.th</span> เท่านั้น
+            อนุญาตเฉพาะบัญชี Google{" "}
+            <span className="text-primary font-mono font-medium">nipitponb68@nu.ac.th</span> เท่านั้น
           </p>
 
           {error && (

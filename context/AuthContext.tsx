@@ -16,15 +16,15 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
-/** Only Google accounts on this domain are allowed to use the app. */
-const ALLOWED_EMAIL_DOMAIN = "@nu.ac.th";
+/** Only this specific Google account is allowed to use the app. */
+const ALLOWED_EMAIL = "nipitponb68@nu.ac.th";
 
 const NOT_ALLOWED_MESSAGE =
-  "อนุญาตเฉพาะบัญชี Google ของมหาวิทยาลัยนเรศวรที่ลงท้ายด้วย @nu.ac.th เท่านั้น กรุณาเข้าสู่ระบบด้วยอีเมลมหาวิทยาลัยของคุณ";
+  "อนุญาตเฉพาะบัญชี Google ที่ได้รับสิทธิ์เท่านั้น กรุณาเข้าสู่ระบบด้วยบัญชีที่ถูกต้อง";
 
 function isAllowedEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  return email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+  return email.toLowerCase() === ALLOWED_EMAIL;
 }
 
 interface AuthContextValue {
@@ -74,8 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const provider = new GoogleAuthProvider();
     // Hints Google to prefer nu.ac.th accounts in the picker. This is only a
-    // UX hint — Google does not enforce it, so we still validate the email
-    // ourselves below and in onAuthStateChanged.
+    // UX hint (it narrows the account picker, nothing more) — actual access
+    // is restricted to one specific email, checked below and in
+    // onAuthStateChanged.
     provider.setCustomParameters({ hd: "nu.ac.th" });
 
     try {

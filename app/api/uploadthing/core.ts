@@ -25,10 +25,10 @@ export const ourFileRouter = {
       // This endpoint is hit directly by the browser, outside Firestore —
       // Firestore Security Rules don't cover it, so identity has to be
       // checked here too, the same way the UI and Firestore both restrict
-      // to @nu.ac.th. The client sends its Firebase ID token as a Bearer
-      // token (see lib/uploadthing.ts); reject anything else outright so
-      // this route can't be used to upload files anonymously or from a
-      // non-@nu.ac.th account, even by someone calling it directly.
+      // to the one allowed account. The client sends its Firebase ID token
+      // as a Bearer token (see lib/uploadthing.ts); reject anything else
+      // outright so this route can't be used to upload files anonymously
+      // or from any other account, even by someone calling it directly.
       const authHeader = req.headers.get("authorization");
       const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
       const verified = await verifyFirebaseIdToken(idToken);

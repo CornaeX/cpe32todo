@@ -12,7 +12,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
  * All we additionally need is the Firebase project id, which is already
  * public (`NEXT_PUBLIC_FIREBASE_PROJECT_ID`) — no extra secret to manage.
  *
- * This is what actually enforces "@nu.ac.th only" on the API routes that
+ * This is what actually enforces "one allowed account only" on the API routes that
  * the browser talks to directly (UploadThing upload/delete). Firebase
  * Authentication + Firestore Security Rules already reject unauthorized
  * reads/writes at the database layer, but Next.js API routes are separate
@@ -38,7 +38,7 @@ export interface VerifiedFirebaseUser {
  * Verifies a Firebase ID token and returns the caller's uid/email, or null
  * if the token is missing, invalid, expired, or not from this Firebase
  * project. Callers must still apply their own authorization checks (e.g.
- * the `@nu.ac.th` domain restriction) on top of this — this function only
+ * the allowed-account restriction) on top of this — this function only
  * proves the token is a genuine, unexpired Firebase credential.
  */
 export async function verifyFirebaseIdToken(
@@ -64,7 +64,7 @@ export async function verifyFirebaseIdToken(
   }
 }
 
-/** Same `@nu.ac.th` restriction used by AuthContext.tsx and firestore.rules. */
+/** Same single-account restriction used by AuthContext.tsx and firestore.rules. */
 export function isNuEmail(email: string | null | undefined): boolean {
-  return !!email && email.toLowerCase().endsWith("@nu.ac.th");
+  return !!email && email.toLowerCase() === "nipitponb68@nu.ac.th";
 }
