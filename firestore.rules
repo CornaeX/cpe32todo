@@ -64,12 +64,15 @@ service cloud.firestore {
       // ---------------------------------------------------------------------
       // /activities/{activityId}/departments/{departmentId}
       //   Fixed set of columns seeded when an activity is created. The app
-      //   only ever reads and creates these — never edits or deletes them.
+      //   never edits these, but deleting an activity cascades down and
+      //   removes its department docs too (Firestore doesn't do this on
+      //   its own), so delete has to be allowed here as well.
       // ---------------------------------------------------------------------
       match /departments/{departmentId} {
         allow read: if isNuUser();
         allow create: if isNuUser();
-        // No update/delete flow exists in the app today; default-deny.
+        allow delete: if isNuUser();
+        // No update flow exists in the app today; default-deny.
 
         // ---------------------------------------------------------------------
         // /activities/{activityId}/departments/{departmentId}/tasks/{taskId}

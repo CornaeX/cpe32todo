@@ -377,7 +377,10 @@ export const ActivityDashboard: React.FC = () => {
     if (!confirmed) return;
     setIsDeletingActivity(activityId);
     try {
-      await deleteActivity(activityId);
+      const { imageKeys, imageUrls } = await deleteActivity(activityId);
+      if (imageKeys.length > 0 || imageUrls.length > 0) {
+        void deleteUploadedFiles({ keys: imageKeys, urls: imageUrls });
+      }
       if (manualSelectedActivityId === activityId) {
         setManualSelectedActivityId(null);
       }
