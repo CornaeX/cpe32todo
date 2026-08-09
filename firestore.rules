@@ -58,8 +58,8 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['taskStats']);
 
-      // No delete flow exists in the app today; default-deny (falls through
-      // to the catch-all rule below) rather than opening up an unused path.
+      // Any @nu.ac.th team member can delete an activity.
+      allow delete: if isNuUser();
 
       // ---------------------------------------------------------------------
       // /activities/{activityId}/departments/{departmentId}

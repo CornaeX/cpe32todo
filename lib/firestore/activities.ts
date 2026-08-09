@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -85,4 +86,12 @@ export async function createActivity(input: {
   await batch.commit();
 
   return activityRef.id;
+}
+
+/**
+ * Deletes an activity.
+ */
+export async function deleteActivity(activityId: string): Promise<void> {
+  const activityRef = doc(db, "activities", activityId);
+  await deleteDoc(activityRef);
 }

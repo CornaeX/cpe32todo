@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   createActivity,
   createTask,
+  deleteActivity,
   deleteTask,
   getActivities,
   getDepartments,
@@ -490,6 +491,26 @@ export const ActivityDashboard: React.FC = () => {
     }
   };
 
+  const [isDeletingActivity, setIsDeletingActivity] = useState<string | null>(null);
+
+  const handleDeleteActivity = async (e: React.MouseEvent, activityId: string, activityName: string) => {
+    e.stopPropagation();
+    const confirmed = window.confirm(`ลบกิจกรรม "${activityName}" ใช่หรือไม่?\nการลบนี้ไม่สามารถย้อนกลับได้`);
+    if (!confirmed) return;
+    setIsDeletingActivity(activityId);
+    try {
+      await deleteActivity(activityId);
+      // If the deleted activity was selected, reset so the UI falls back to the first remaining one
+      if (manualSelectedActivityId === activityId) {
+        setManualSelectedActivityId(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete activity', error);
+    } finally {
+      setIsDeletingActivity(null);
+    }
+  };
+
   return (
     <div className="flex h-screen w-full bg-[#1b1c31] text-white font-sans overflow-hidden relative">
       {/* ================= SIDEBAR ================= */}
@@ -542,7 +563,7 @@ export const ActivityDashboard: React.FC = () => {
                   )}
 
                   <div className="flex items-center justify-between mb-2.5 pr-2">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <span className={`w-2.5 h-2.5 rounded-full ${theme.statusDotColor} shadow-sm shrink-0`} />
                       <span
                         className={`text-sm truncate transition-colors ${
@@ -552,6 +573,27 @@ export const ActivityDashboard: React.FC = () => {
                         {act.name}
                       </span>
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteActivity(e, act.id, act.name)}
+                      disabled={isDeletingActivity === act.id}
+                      title="ลบกิจกรรม"
+                      className="shrink-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-gray-500 hover:text-red-400 disabled:opacity-30 p-0.5 rounded"
+                    >
+                      {isDeletingActivity === act.id ? (
+                        <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4h6v2" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
 
                   <div className="w-full bg-[#1b1c31]/80 h-2 rounded-full overflow-hidden p-0.5 border border-gray-700/50">
