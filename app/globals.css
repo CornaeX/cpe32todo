@@ -1,26 +1,197 @@
 @import "tailwindcss";
 
+/* =========================================================================
+   Design tokens — light (default) and dark
+   Brand identity: deep navy + white. Status colors (coral/amber/green)
+   always pair with a label so meaning never rides on color alone, and are
+   tuned separately per theme so they stay legible on both a white and a
+   near-black background.
+   ========================================================================= */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef1f8;
+  --color-border: #dce2f0;
+  --color-border-strong: #c2cbe2;
+
+  --color-ink: #101828;
+  --color-ink-muted: #5b6478;
+  --color-ink-faint: #8a93ac;
+
+  --color-primary: #1e4fa3;
+  --color-primary-hover: #163c80;
+  --color-primary-soft: #e7eefb;
+
+  --color-todo: #d9502f;
+  --color-todo-soft: #fbe9e3;
+  --color-doing: #b9800f;
+  --color-doing-soft: #faf0da;
+  --color-done: #16824f;
+  --color-done-soft: #e0f3e8;
+
+  --color-danger: #cf3a30;
+  --color-danger-soft: #fbe7e5;
+}
+
+.dark {
+  --color-bg: #0a1120;
+  --color-surface: #111b30;
+  --color-surface-muted: #182543;
+  --color-border: #29385c;
+  --color-border-strong: #3a4d78;
+
+  --color-ink: #f2f5fb;
+  --color-ink-muted: #a3aec9;
+  --color-ink-faint: #6c7896;
+
+  --color-primary: #5b8def;
+  --color-primary-hover: #7ba3f2;
+  --color-primary-soft: #1a2a4d;
+
+  --color-todo: #ff8f6b;
+  --color-todo-soft: #35201a;
+  --color-doing: #f0b942;
+  --color-doing-soft: #362a10;
+  --color-done: #3ddb99;
+  --color-done-soft: #0f2e22;
+
+  --color-danger: #f2695c;
+  --color-danger-soft: #3a1e1c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-faint: var(--color-ink-faint);
+
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-soft: var(--color-primary-soft);
+
+  --color-todo: var(--color-todo);
+  --color-todo-soft: var(--color-todo-soft);
+  --color-doing: var(--color-doing);
+  --color-doing-soft: var(--color-doing-soft);
+  --color-done: var(--color-done);
+  --color-done-soft: var(--color-done-soft);
+
+  --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
+
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Hide scrollbars for horizontally-scrolling chip rows / drawers while
+   keeping the element scrollable (functionality preserved, visual noise
+   removed). */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area aware padding helpers for mobile bottom bars/sheets. */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+.animate-scale-in {
+  animation: scale-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-sheet-up {
+  animation: sheet-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-sheet-up,
+  .animate-slide-in-left {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Consistent visible focus ring across custom interactive elements. */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

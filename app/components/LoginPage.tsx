@@ -2,6 +2,8 @@
 
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
+import { Button, ProgressRing, ThemeToggle } from "@/app/components/ui";
+import { CloseIcon } from "@/app/components/icons";
 
 const GoogleIcon: React.FC = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
@@ -28,44 +30,61 @@ export default function LoginPage() {
   const { signInWithGoogle, signingIn, error, clearError } = useAuth();
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-[#1b1c31] text-white font-sans px-4">
-      <div className="w-full max-w-sm bg-[#23253b] border border-[#2d2f48] rounded-2xl p-8 shadow-2xl space-y-6">
-        <div className="text-center space-y-1.5">
-          <div className="flex items-baseline justify-center gap-2">
-            <h1 className="text-2xl font-light tracking-wide">Activity</h1>
-            <span className="text-xs text-gray-400 uppercase font-mono">CPE32</span>
-          </div>
-          <p className="text-sm text-gray-400 font-light">เข้าสู่ระบบเพื่อดำเนินการต่อ</p>
+    <div className="relative flex min-h-screen w-full items-center justify-center bg-bg px-4 py-10">
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+        <ThemeToggle className="bg-surface border border-border shadow-sm" />
+      </div>
+
+      <div className="w-full max-w-sm">
+        <div className="flex justify-center mb-6">
+          <ProgressRing percent={68} size={64} strokeWidth={7}>
+            <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+          </ProgressRing>
         </div>
 
-        <button
-          type="button"
-          onClick={signInWithGoogle}
-          disabled={signingIn}
-          className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 rounded-full py-2.5 text-sm font-medium hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-        >
-          <GoogleIcon />
-          {signingIn ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบด้วย Google"}
-        </button>
-
-        <p className="text-xs text-gray-400 text-center font-light leading-relaxed">
-          อนุญาตเฉพาะบัญชี Google ของมหาวิทยาลัยนเรศวรที่ลงท้ายด้วย{" "}
-          <span className="text-emerald-400 font-mono">@nu.ac.th</span> เท่านั้น
-        </p>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-300 text-xs rounded-xl px-4 py-3 flex items-start justify-between gap-3 animate-fade-in">
-            <span className="font-light leading-relaxed">{error}</span>
-            <button
-              type="button"
-              onClick={clearError}
-              className="text-red-300 hover:text-white shrink-0 font-bold"
-              aria-label="ปิดข้อความแจ้งเตือน"
-            >
-              ✕
-            </button>
+        <div className="bg-surface border border-border rounded-3xl p-7 sm:p-8 shadow-xl shadow-ink/5 space-y-7">
+          <div className="text-center space-y-2">
+            <div className="flex items-baseline justify-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">Activity</h1>
+              <span className="text-[11px] text-primary bg-primary-soft px-2 py-0.5 rounded-full font-mono font-medium tracking-wide">
+                CPE32
+              </span>
+            </div>
+            <p className="text-sm text-ink-muted">เข้าสู่ระบบเพื่อดำเนินการต่อ</p>
           </div>
-        )}
+
+          <Button
+            type="button"
+            onClick={signInWithGoogle}
+            disabled={signingIn}
+            loading={signingIn}
+            variant="secondary"
+            size="lg"
+            className="w-full !rounded-full !bg-surface hover:!bg-surface-muted"
+          >
+            {!signingIn && <GoogleIcon />}
+            {signingIn ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบด้วย Google"}
+          </Button>
+
+          <p className="text-xs text-ink-faint text-center leading-relaxed">
+            อนุญาตเฉพาะบัญชี Google ของมหาวิทยาลัยนเรศวรที่ลงท้ายด้วย{" "}
+            <span className="text-primary font-mono font-medium">@nu.ac.th</span> เท่านั้น
+          </p>
+
+          {error && (
+            <div className="bg-danger-soft border border-danger/25 text-danger text-xs rounded-2xl px-4 py-3 flex items-start justify-between gap-3 animate-fade-in">
+              <span className="leading-relaxed">{error}</span>
+              <button
+                type="button"
+                onClick={clearError}
+                className="text-danger hover:opacity-70 shrink-0 focus-ring rounded"
+                aria-label="ปิดข้อความแจ้งเตือน"
+              >
+                <CloseIcon width={14} height={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

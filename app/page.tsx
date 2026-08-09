@@ -1,15 +1,16 @@
 "use client";
 
-import ActivityDashboard from "@/app/components/ActivityDashboard";
+import ActivityDashboard from "@/app/components/dashboard/ActivityDashboard";
 import LoginPage from "@/app/components/LoginPage";
 import { useAuth } from "@/context/AuthContext";
+import { ProgressRing } from "@/app/components/ui";
 
 function LoadingScreen() {
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-[#1b1c31] text-white font-sans">
-      <div className="flex items-center gap-3 text-sm text-gray-400 font-light">
-        <span className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
-        กำลังโหลด...
+    <div className="flex h-screen w-full items-center justify-center bg-bg">
+      <div className="flex flex-col items-center gap-3">
+        <ProgressRing percent={40} size={40} strokeWidth={4} />
+        <span className="text-xs text-ink-muted">กำลังโหลด...</span>
       </div>
     </div>
   );
