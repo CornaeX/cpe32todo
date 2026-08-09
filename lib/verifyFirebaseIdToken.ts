@@ -12,7 +12,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
  * All we additionally need is the Firebase project id, which is already
  * public (`NEXT_PUBLIC_FIREBASE_PROJECT_ID`) — no extra secret to manage.
  *
- * This is what actually enforces "one allowed account only" on the API routes that
+ * This is what actually enforces "allowlisted accounts only" on the API routes that
  * the browser talks to directly (UploadThing upload/delete). Firebase
  * Authentication + Firestore Security Rules already reject unauthorized
  * reads/writes at the database layer, but Next.js API routes are separate
@@ -64,7 +64,25 @@ export async function verifyFirebaseIdToken(
   }
 }
 
-/** Same single-account restriction used by AuthContext.tsx and firestore.rules. */
-export function isNuEmail(email: string | null | undefined): boolean {
-  return !!email && email.toLowerCase() === "nipitponb68@nu.ac.th";
+/**
+ * Checks the same `/allowlist` Firestore collection that firestore.rules
+ * and AuthContext.tsx use, via the Firestore REST API. Passing the
+ * caller's own verified ID token as the Bearer credential means this read
+ * is subject to the exact same security rule as the client (a signed-in
+ * user may only read their own allowlist entry) — no service account or
+ * elevated credentials needed here either. Returns false on any error
+ * (not found, network failure, etc.) — fail closed.
+ */
+export async function isAllowlistedEmail(idToken: string, email: string): Promise<boolean> {
+  if (!PROJECT_ID) return false;
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/allowlist/${encodeURIComponent(
+    email.toLowerCase()
+  )}`;
+
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${idToken}` } });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

@@ -1,6 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
-import { isNuEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
+import { isAllowlistedEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
 
 const f = createUploadthing();
 
@@ -33,7 +33,7 @@ export const ourFileRouter = {
       const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
       const verified = await verifyFirebaseIdToken(idToken);
 
-      if (!verified || !isNuEmail(verified.email)) {
+      if (!verified || !idToken || !(await isAllowlistedEmail(idToken, verified.email))) {
         throw new UploadThingError("Unauthorized");
       }
 

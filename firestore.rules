@@ -12,12 +12,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Only this specific Google account is allowed to use the app.
+    // Only Google accounts with an entry in /allowlist may use the app.
+    // Membership is data, not code — see the /allowlist match block below
+    // for how entries are added/removed.
     function isNuUser() {
       return isSignedIn()
         && request.auth.token.email != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() == 'nipitponb68@nu.ac.th';
+        && exists(/databases/$(database)/documents/allowlist/$(request.auth.token.email.lower()));
     }
 
     // The email a doc claims as its author must match the caller's own
@@ -89,6 +91,26 @@ service cloud.firestore {
           allow delete: if isNuUser();
         }
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // /allowlist/{email}
+    //   The actual access-control list. One doc per allowed account, keyed
+    //   by lowercased email — the doc's content doesn't matter, only its
+    //   existence. To grant access, add a document here (e.g. from the
+    //   Firebase console's Firestore tab) with that email, lowercased, as
+    //   the document ID; to revoke, delete it. No rules redeploy needed
+    //   either way.
+    //   A signed-in user may only read their own entry (to check "am I
+    //   allowed"), never list the whole collection or anyone else's entry.
+    //   Nothing in the app ever writes here — entries are managed by hand
+    //   (or the Admin SDK/console, which bypasses these rules).
+    // ---------------------------------------------------------------------
+    match /allowlist/{email} {
+      allow get: if isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == email;
+      allow list, write: if false;
     }
 
     // ---------------------------------------------------------------------

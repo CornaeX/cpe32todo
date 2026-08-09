@@ -14,17 +14,27 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
-
-/** Only this specific Google account is allowed to use the app. */
-const ALLOWED_EMAIL = "nipitponb68@nu.ac.th";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 const NOT_ALLOWED_MESSAGE =
   "อนุญาตเฉพาะบัญชี Google ที่ได้รับสิทธิ์เท่านั้น กรุณาเข้าสู่ระบบด้วยบัญชีที่ถูกต้อง";
 
-function isAllowedEmail(email: string | null | undefined): boolean {
+/**
+ * Checks the `/allowlist` Firestore collection for an entry matching this
+ * email (see firestore.rules — that's the actual access-control list;
+ * this is just the client-side read of it, gated by the same rule that
+ * only lets a signed-in user read their own entry). Any failure — no
+ * entry, not signed in yet, a network error — is treated as "not allowed".
+ */
+async function isAllowedEmail(email: string | null | undefined): Promise<boolean> {
   if (!email) return false;
-  return email.toLowerCase() === ALLOWED_EMAIL;
+  try {
+    const snap = await getDoc(doc(db, "allowlist", email.toLowerCase()));
+    return snap.exists();
+  } catch {
+    return false;
+  }
 }
 
 interface AuthContextValue {
@@ -51,9 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && !isAllowedEmail(firebaseUser.email)) {
+      if (firebaseUser && !(await isAllowedEmail(firebaseUser.email))) {
         // Defensive check: covers any session (e.g. from before this
-        // restriction existed, or a stale token) that isn't @nu.ac.th.
+        // account was allowlisted, or a stale token, or after being
+        // removed from the allowlist) that isn't currently allowed.
         await signOut(auth);
         setUser(null);
         setError(NOT_ALLOWED_MESSAGE);
@@ -73,16 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSigningIn(true);
 
     const provider = new GoogleAuthProvider();
-    // Hints Google to prefer nu.ac.th accounts in the picker. This is only a
-    // UX hint (it narrows the account picker, nothing more) — actual access
-    // is restricted to one specific email, checked below and in
-    // onAuthStateChanged.
-    provider.setCustomParameters({ hd: "nu.ac.th" });
 
     try {
       const result = await signInWithPopup(auth, provider);
 
-      if (!isAllowedEmail(result.user.email)) {
+      if (!(await isAllowedEmail(result.user.email))) {
         await signOut(auth);
         setUser(null);
         setError(NOT_ALLOWED_MESSAGE);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
-import { isNuEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
+import { isAllowlistedEmail, verifyFirebaseIdToken } from "@/lib/verifyFirebaseIdToken";
 
 const utapi = new UTApi();
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const idToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const verified = await verifyFirebaseIdToken(idToken);
-  if (!verified || !isNuEmail(verified.email)) {
+  if (!verified || !idToken || !(await isAllowlistedEmail(idToken, verified.email))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

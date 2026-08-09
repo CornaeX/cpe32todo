@@ -67,8 +67,7 @@ export default function LoginPage() {
           </Button>
 
           <p className="text-xs text-ink-faint text-center leading-relaxed">
-            อนุญาตเฉพาะบัญชี Google{" "}
-            <span className="text-primary font-mono font-medium">nipitponb68@nu.ac.th</span> เท่านั้น
+            อนุญาตเฉพาะบัญชี Google ที่ได้รับสิทธิ์เท่านั้น
           </p>
 
           {error && (
