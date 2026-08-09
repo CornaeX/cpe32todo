@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   createActivity,
   createTask,
+  deleteTask,
   getActivities,
   getDepartments,
   getTasks,
@@ -222,6 +223,7 @@ export const ActivityDashboard: React.FC = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [initialTaskState, setInitialTaskState] = useState<Task | null>(null);
   const [isSavingTask, setIsSavingTask] = useState<boolean>(false);
+  const [isDeletingTask, setIsDeletingTask] = useState<boolean>(false);
 
   // Image upload (UploadThing) state for the task being edited
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
@@ -368,6 +370,43 @@ export const ActivityDashboard: React.FC = () => {
       console.error('Failed to save task', error);
     } finally {
       setIsSavingTask(false);
+    }
+  };
+
+  const handleStatusChange = (newStatus: TaskStatus) => {
+    setEditingTask((prev) => (prev ? { ...prev, status: newStatus, statusColor: statusColorFor(newStatus) } : prev));
+  };
+
+  const handleDeleteTask = async () => {
+    if (!activeDeptId || !editingTask || !selectedActivityId) return;
+    // Drafts (never saved to Firestore) just get discarded locally.
+    if (editingTask.id.startsWith('draft-')) {
+      discardSessionUploads(null);
+      setImageUploadError(null);
+      setCurrentView('board');
+      return;
+    }
+
+    const confirmed = window.confirm(`ลบงาน "${editingTask.title}" ใช่หรือไม่? การลบนี้ไม่สามารถย้อนกลับได้`);
+    if (!confirmed) return;
+
+    setIsDeletingTask(true);
+    try {
+      await deleteTask(selectedActivityId, activeDeptId, editingTask.id, editingTask.status);
+      discardSessionUploads(null);
+      // Best-effort cleanup of the task's own image now that the task is gone.
+      if (editingTask.imageUrl) {
+        void deleteUploadedFiles({
+          keys: editingTask.imageKey ? [editingTask.imageKey] : [],
+          urls: editingTask.imageKey ? [] : [editingTask.imageUrl],
+        });
+      }
+      setImageUploadError(null);
+      setCurrentView('board');
+    } catch (error) {
+      console.error('Failed to delete task', error);
+    } finally {
+      setIsDeletingTask(false);
     }
   };
 
@@ -601,11 +640,61 @@ export const ActivityDashboard: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* DELETE TASK */}
+              <button
+                onClick={handleDeleteTask}
+                disabled={isDeletingTask || isSavingTask}
+                className="ml-auto bg-[#2a2d42] border border-red-500/60 hover:bg-red-500/10 text-xs text-red-400 hover:text-red-300 px-5 py-2 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingTask ? 'กำลังลบ...' : 'ลบงาน'}
+              </button>
             </div>
 
-            <div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange('todo')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    editingTask.status === 'todo'
+                      ? 'border-orange-500 bg-orange-500/10 text-orange-400 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-orange-500" />
+                  สิ่งที่ต้องทำ
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange('doing')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    editingTask.status === 'doing'
+                      ? 'border-yellow-400 bg-yellow-400/10 text-yellow-300 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                  กำลังทำ
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange('done')}
+                  className={`py-2 px-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    editingTask.status === 'done'
+                      ? 'border-emerald-400 bg-emerald-400/10 text-emerald-300 font-medium'
+                      : 'border-gray-700 bg-[#1b1c31] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  สำเร็จ
+                </button>
+              </div>
+
               <div className="inline-block bg-[#2a2d42] border border-gray-400/80 rounded-2xl px-5 py-1.5 text-xs text-gray-300 font-light">
-                สถานะ :{' '}
+                รายละเอียดสถานะ :{' '}
                 <input
                   type="text"
                   value={editingTask.statusText}
