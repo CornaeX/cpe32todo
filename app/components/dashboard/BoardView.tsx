@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TaskStatus } from "@/lib/firestore";
 import { EmptyState, ProgressRing, STATUS_META, Skeleton, StatusDot, departmentAccent } from "@/app/components/ui";
@@ -28,6 +28,26 @@ interface DragState {
   status: TaskStatus;
   pointerX: number;
   pointerY: number;
+}
+
+// How close to the top/bottom edge of the scrollable area (in px) triggers
+// auto-scroll, and how fast it scrolls right at the very edge.
+const AUTO_SCROLL_EDGE = 90;
+const AUTO_SCROLL_MAX_SPEED = 16;
+
+/** Walks up from `node` to find the nearest ancestor that actually
+ * scrolls. The app's layout scrolls an inner `overflow-y-auto` panel
+ * rather than the window, so `window`/`document` won't do here. */
+function getScrollParent(node: HTMLElement | null): HTMLElement {
+  let el = node?.parentElement ?? null;
+  while (el) {
+    const style = window.getComputedStyle(el);
+    if ((style.overflowY === "auto" || style.overflowY === "scroll") && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
 }
 
 function StatChip({ label, value, tone }: { label: string; value: number; tone: TaskStatus }) {
@@ -155,6 +175,48 @@ export default function BoardView({
   const [hoveredDeptId, setHoveredDeptId] = useState<string | null>(null);
   const dragInfoRef = useRef<{ taskId: string; fromDeptId: string } | null>(null);
   const hoveredDeptIdRef = useRef<string | null>(null);
+  const pointerYRef = useRef<number>(0);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
+  const autoScrollRafRef = useRef<number | null>(null);
+  const autoScrollStepRef = useRef<() => void>(() => {});
+
+  // Keeps scrolling the drag's scroll container for as long as the
+  // pointer stays parked near its top/bottom edge, independent of
+  // whether new pointermove events are still arriving. Stored in a ref
+  // (rather than referencing the function by name inside itself) so the
+  // recursive requestAnimationFrame call always goes through the latest
+  // version without a self-reference TDZ issue. Assigned in an effect
+  // since refs must not be written during render.
+  useEffect(() => {
+    autoScrollStepRef.current = () => {
+      const scrollParent = scrollParentRef.current;
+      if (!scrollParent || !dragInfoRef.current) {
+        autoScrollRafRef.current = null;
+        return;
+      }
+
+      const rect = scrollParent.getBoundingClientRect();
+      const y = pointerYRef.current;
+      const topEdge = rect.top + AUTO_SCROLL_EDGE;
+      const bottomEdge = rect.bottom - AUTO_SCROLL_EDGE;
+
+      if (y < topEdge) {
+        const intensity = Math.min(1, (topEdge - y) / AUTO_SCROLL_EDGE);
+        scrollParent.scrollTop -= intensity * AUTO_SCROLL_MAX_SPEED;
+      } else if (y > bottomEdge) {
+        const intensity = Math.min(1, (y - bottomEdge) / AUTO_SCROLL_EDGE);
+        scrollParent.scrollTop += intensity * AUTO_SCROLL_MAX_SPEED;
+      }
+
+      autoScrollRafRef.current = requestAnimationFrame(() => autoScrollStepRef.current());
+    };
+  }, []);
+
+  const startAutoScroll = useCallback(() => {
+    if (autoScrollRafRef.current === null) {
+      autoScrollRafRef.current = requestAnimationFrame(() => autoScrollStepRef.current());
+    }
+  }, []);
 
   // Using setPointerCapture means every subsequent pointermove/up/cancel
   // for this pointer fires on the SAME grip element no matter where the
@@ -168,7 +230,13 @@ export default function BoardView({
 
     dragInfoRef.current = { taskId: task.id, fromDeptId: deptId };
     hoveredDeptIdRef.current = null;
+    pointerYRef.current = e.clientY;
+    scrollParentRef.current = getScrollParent(e.currentTarget);
     document.body.style.userSelect = "none";
+
+    if (autoScrollRafRef.current === null) {
+      startAutoScroll();
+    }
 
     setDrag({
       taskId: task.id,
@@ -179,12 +247,13 @@ export default function BoardView({
       pointerY: e.clientY,
     });
     setHoveredDeptId(null);
-  }, []);
+  }, [startAutoScroll]);
 
   const handleGripPointerMove = useCallback((e: React.PointerEvent<HTMLSpanElement>) => {
     if (!dragInfoRef.current) return;
     e.preventDefault();
 
+    pointerYRef.current = e.clientY;
     setDrag((prev) => (prev ? { ...prev, pointerX: e.clientX, pointerY: e.clientY } : prev));
 
     // Pointer capture retargets hit-testing for the element that owns the
@@ -215,6 +284,11 @@ export default function BoardView({
 
       dragInfoRef.current = null;
       hoveredDeptIdRef.current = null;
+      scrollParentRef.current = null;
+      if (autoScrollRafRef.current !== null) {
+        cancelAnimationFrame(autoScrollRafRef.current);
+        autoScrollRafRef.current = null;
+      }
       document.body.style.userSelect = "";
       setDrag(null);
       setHoveredDeptId(null);
