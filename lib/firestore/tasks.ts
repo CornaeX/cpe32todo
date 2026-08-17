@@ -3,12 +3,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   increment,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -120,6 +122,38 @@ export async function updateTask(
       });
     }
   }
+}
+
+/**
+ * Moves a task from one department to another (e.g. via drag and drop on
+ * the board). Since tasks live in a subcollection keyed by department,
+ * "moving" means copying the task doc into the target department's
+ * subcollection and deleting it from the source — done atomically via a
+ * batch write so the task is never briefly duplicated or lost. The
+ * activity's `taskStats` counters are untouched since the task stays
+ * within the same activity.
+ */
+export async function moveTask(
+  activityId: string,
+  fromDepartmentId: string,
+  toDepartmentId: string,
+  taskId: string
+): Promise<void> {
+  if (fromDepartmentId === toDepartmentId) return;
+
+  const sourceRef = doc(tasksCollection(activityId, fromDepartmentId), taskId);
+  const sourceSnap = await getDoc(sourceRef);
+  if (!sourceSnap.exists()) return;
+
+  const targetRef = doc(tasksCollection(activityId, toDepartmentId));
+
+  const batch = writeBatch(db);
+  batch.set(targetRef, {
+    ...sourceSnap.data(),
+    updatedAt: serverTimestamp(),
+  });
+  batch.delete(sourceRef);
+  await batch.commit();
 }
 
 /**

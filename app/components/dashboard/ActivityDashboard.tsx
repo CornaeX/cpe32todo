@@ -10,6 +10,7 @@ import {
   getActivities,
   getDepartments,
   getTasks,
+  moveTask,
   updateTask,
   type ActivityWithId,
   type DepartmentWithId,
@@ -307,6 +308,32 @@ export const ActivityDashboard: React.FC = () => {
     setCurrentView("board");
   };
 
+  const handleMoveTask = async (fromDeptId: string, toDeptId: string, taskId: string) => {
+    if (!selectedActivityId || fromDeptId === toDeptId) return;
+
+    // Optimistic update so the task jumps to its new department
+    // immediately, instead of waiting for both Firestore listeners to
+    // round-trip.
+    setTasksByDept((prev) => {
+      const sourceTasks = prev[fromDeptId] ?? [];
+      const movingTask = sourceTasks.find((t) => t.id === taskId);
+      if (!movingTask) return prev;
+      return {
+        ...prev,
+        [fromDeptId]: sourceTasks.filter((t) => t.id !== taskId),
+        [toDeptId]: [...(prev[toDeptId] ?? []), movingTask],
+      };
+    });
+
+    try {
+      await moveTask(selectedActivityId, fromDeptId, toDeptId, taskId);
+    } catch (error) {
+      console.error("Failed to move task", error);
+      // The real-time listeners will resync state to the true Firestore
+      // contents shortly after, correcting any optimistic mismatch.
+    }
+  };
+
   const handleOpenExistingTask = (deptId: string, task: Task) => {
     setActiveDeptId(deptId);
     setEditingTask(task);
@@ -503,6 +530,7 @@ export const ActivityDashboard: React.FC = () => {
               departments={departments}
               onOpenTask={handleOpenExistingTask}
               onAddTask={handleOpenModal}
+              onMoveTask={handleMoveTask}
             />
           </div>
         )}
