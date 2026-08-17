@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TaskStatus } from "@/lib/firestore";
 import { EmptyState, ProgressRing, STATUS_META, Skeleton, StatusDot, departmentAccent } from "@/app/components/ui";
@@ -47,8 +47,10 @@ function DepartmentCard({
   onAddTask,
   isDropTarget,
   draggingTaskId,
-  registerCardRef,
-  onTaskPointerDown,
+  onGripPointerDown,
+  onGripPointerMove,
+  onGripPointerUp,
+  onGripPointerCancel,
 }: {
   dept: Department;
   accent: string;
@@ -56,15 +58,20 @@ function DepartmentCard({
   onAddTask: (deptId: string) => void;
   isDropTarget: boolean;
   draggingTaskId: string | null;
-  registerCardRef: (deptId: string, el: HTMLDivElement | null) => void;
-  onTaskPointerDown: (e: React.PointerEvent, deptId: string, task: Task) => void;
+  onGripPointerDown: (e: React.PointerEvent<HTMLSpanElement>, deptId: string, task: Task) => void;
+  onGripPointerMove: (e: React.PointerEvent<HTMLSpanElement>) => void;
+  onGripPointerUp: (e: React.PointerEvent<HTMLSpanElement>) => void;
+  onGripPointerCancel: (e: React.PointerEvent<HTMLSpanElement>) => void;
 }) {
   const total = dept.tasks.length;
   const done = dept.tasks.filter((t) => t.status === "done").length;
 
   return (
     <div
-      ref={(el) => registerCardRef(dept.id, el)}
+      // Read by elementFromPoint(...).closest("[data-dept-id]") while a
+      // drag is in progress, to figure out which department the pointer
+      // is currently over.
+      data-dept-id={dept.id}
       className={`bg-surface border rounded-2xl overflow-hidden flex flex-col shadow-sm shadow-ink/[0.02] transition-colors ${
         isDropTarget ? "border-primary ring-2 ring-primary/30" : "border-border"
       }`}
@@ -97,7 +104,10 @@ function DepartmentCard({
               }`}
             >
               <span
-                onPointerDown={(e) => onTaskPointerDown(e, dept.id, task)}
+                onPointerDown={(e) => onGripPointerDown(e, dept.id, task)}
+                onPointerMove={onGripPointerMove}
+                onPointerUp={onGripPointerUp}
+                onPointerCancel={onGripPointerCancel}
                 className="pl-3 py-3 pr-1 text-ink-faint/50 hover:text-ink-faint cursor-grab active:cursor-grabbing touch-none shrink-0"
                 aria-label="ลากเพื่อย้ายงานไปฝ่ายอื่น"
                 role="button"
@@ -143,25 +153,23 @@ export default function BoardView({
 }: BoardViewProps) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoveredDeptId, setHoveredDeptId] = useState<string | null>(null);
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const hoveredDeptIdRef = useRef<string | null>(null);
   const dragInfoRef = useRef<{ taskId: string; fromDeptId: string } | null>(null);
+  const hoveredDeptIdRef = useRef<string | null>(null);
 
-  // Drag only ever starts from a client-side pointer event, so by the time
-  // `drag` is non-null we're guaranteed to be on the client and `document`
-  // is safe to use for the portal below — no separate mount-detection
-  // effect needed.
-
-  const registerCardRef = useCallback((deptId: string, el: HTMLDivElement | null) => {
-    if (el) cardRefs.current.set(deptId, el);
-    else cardRefs.current.delete(deptId);
-  }, []);
-
-  const handleTaskPointerDown = useCallback((e: React.PointerEvent, deptId: string, task: Task) => {
-    // Only left click / primary touch/pen contact should start a drag.
+  // Using setPointerCapture means every subsequent pointermove/up/cancel
+  // for this pointer fires on the SAME grip element no matter where the
+  // finger/cursor actually travels — so we attach the move/up handlers
+  // directly on the grip span itself rather than relying on window
+  // listeners (which turned out to miss drops in some browsers).
+  const handleGripPointerDown = useCallback((e: React.PointerEvent<HTMLSpanElement>, deptId: string, task: Task) => {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+
     dragInfoRef.current = { taskId: task.id, fromDeptId: deptId };
+    hoveredDeptIdRef.current = null;
+    document.body.style.userSelect = "none";
+
     setDrag({
       taskId: task.id,
       fromDeptId: deptId,
@@ -170,56 +178,52 @@ export default function BoardView({
       pointerX: e.clientX,
       pointerY: e.clientY,
     });
+    setHoveredDeptId(null);
   }, []);
 
-  const isDragging = drag !== null;
+  const handleGripPointerMove = useCallback((e: React.PointerEvent<HTMLSpanElement>) => {
+    if (!dragInfoRef.current) return;
+    e.preventDefault();
 
-  useEffect(() => {
-    if (!isDragging) return;
+    setDrag((prev) => (prev ? { ...prev, pointerX: e.clientX, pointerY: e.clientY } : prev));
 
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.userSelect = "none";
+    // Pointer capture retargets hit-testing for the element that owns the
+    // capture, but elementFromPoint still tells us the real element under
+    // the cursor/finger — that's what we want for drop-target detection.
+    const elUnderPointer = document.elementFromPoint(e.clientX, e.clientY);
+    const deptEl = elUnderPointer?.closest<HTMLElement>("[data-dept-id]");
+    const deptId = deptEl?.getAttribute("data-dept-id") ?? null;
 
-    const updateHoveredDept = (x: number, y: number) => {
-      let found: string | null = null;
-      cardRefs.current.forEach((el, deptId) => {
-        const rect = el.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          found = deptId;
-        }
-      });
-      hoveredDeptIdRef.current = found;
-      setHoveredDeptId(found);
-    };
+    hoveredDeptIdRef.current = deptId;
+    setHoveredDeptId(deptId);
+  }, []);
 
-    const handleMove = (e: PointerEvent) => {
-      e.preventDefault();
-      setDrag((prev) => (prev ? { ...prev, pointerX: e.clientX, pointerY: e.clientY } : prev));
-      updateHoveredDept(e.clientX, e.clientY);
-    };
+  const finishDrag = useCallback(
+    (e: React.PointerEvent<HTMLSpanElement>, commit: boolean) => {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // no-op — capture may already have been released
+      }
 
-    const finishDrag = () => {
       const info = dragInfoRef.current;
       const dropDeptId = hoveredDeptIdRef.current;
-      if (info && dropDeptId && dropDeptId !== info.fromDeptId) {
+
+      if (commit && info && dropDeptId && dropDeptId !== info.fromDeptId) {
         onMoveTask(info.fromDeptId, dropDeptId, info.taskId);
       }
+
       dragInfoRef.current = null;
       hoveredDeptIdRef.current = null;
+      document.body.style.userSelect = "";
       setDrag(null);
       setHoveredDeptId(null);
-    };
+    },
+    [onMoveTask]
+  );
 
-    window.addEventListener("pointermove", handleMove, { passive: false });
-    window.addEventListener("pointerup", finishDrag);
-    window.addEventListener("pointercancel", finishDrag);
-    return () => {
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", finishDrag);
-      window.removeEventListener("pointercancel", finishDrag);
-    };
-  }, [isDragging, onMoveTask]);
+  const handleGripPointerUp = useCallback((e: React.PointerEvent<HTMLSpanElement>) => finishDrag(e, true), [finishDrag]);
+  const handleGripPointerCancel = useCallback((e: React.PointerEvent<HTMLSpanElement>) => finishDrag(e, false), [finishDrag]);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-7 max-w-6xl mx-auto w-full">
@@ -272,8 +276,10 @@ export default function BoardView({
                 onAddTask={onAddTask}
                 isDropTarget={hoveredDeptId === dept.id && !!drag && drag.fromDeptId !== dept.id}
                 draggingTaskId={drag?.taskId ?? null}
-                registerCardRef={registerCardRef}
-                onTaskPointerDown={handleTaskPointerDown}
+                onGripPointerDown={handleGripPointerDown}
+                onGripPointerMove={handleGripPointerMove}
+                onGripPointerUp={handleGripPointerUp}
+                onGripPointerCancel={handleGripPointerCancel}
               />
             ))}
           </div>
